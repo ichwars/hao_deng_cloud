@@ -5,9 +5,7 @@ import math
 import time
 
 from homeassistant.components.light import (
-    _DEPRECATED_ATTR_KELVIN,
     ATTR_BRIGHTNESS,
-    ATTR_RGB_COLOR,
     ATTR_COLOR_TEMP_KELVIN,
     ATTR_HS_COLOR,
     ColorMode,

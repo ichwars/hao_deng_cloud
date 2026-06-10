@@ -1,3 +1,29 @@
+# Hao Deng Cloud Fixed
+
+Maintained fork of `Pharylon/hao_deng_cloud` for Home Assistant.
+
+## What this fork fixes
+
+- Fixes lights incorrectly showing as unavailable when off or reporting zero brightness
+- Adds startup status refresh retries after Home Assistant restarts
+- Uses unique cloud IDs for Home Assistant device registry identifiers
+- Keeps the original Home Assistant domain: `hao_deng_cloud`
+
+## Installation via HACS custom repository
+
+1. Open HACS in Home Assistant
+2. Go to Custom repositories
+3. Add this repository as an Integration
+4. Install Hao Deng Cloud Fixed
+5. Restart Home Assistant
+
+## Migration from the original integration
+
+This fork keeps the same domain: `hao_deng_cloud`.
+
+Remove or overwrite the original custom component before installing this fork. It cannot run side-by-side with the original integration because both use the same Home Assistant domain.
+
+
 # Hao Deng Cloud Component for Home Assistant
 
 

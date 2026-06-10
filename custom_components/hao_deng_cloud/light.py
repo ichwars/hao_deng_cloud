@@ -140,44 +140,44 @@ class HaoDengLight(LightEntity):
         )
 
     def _update_light(self, color_data: ExternalColorData):
-    """Update light from fetched cloud data."""
-    try:
-        if color_data.isAvailable is False:
-            _LOGGER.debug(
-                "Update timestamp for %s is 00, treating status as stale but usable",
-                self._attr_name,
-            )
+        """Update light from fetched cloud data."""
+        try:
+            if color_data.isAvailable is False:
+                _LOGGER.debug(
+                    "Update timestamp for %s is 00, treating status as stale but usable",
+                    self._attr_name,
+                )
 
-        if (
-            time.time() - self._last_update < 5
-            and self._attr_color_mode != ColorMode.UNKNOWN
-        ):
-            return
+            if (
+                time.time() - self._last_update < 5
+                and self._attr_color_mode != ColorMode.UNKNOWN
+            ):
+                return
 
-        _LOGGER.info("Updating %s", self._attr_name)
+            _LOGGER.info("Updating %s", self._attr_name)
 
-        if color_data.isHsv and color_data.hsv is not None:
-            self._update_hsv_values(color_data)
-        elif color_data.colorTempBrightness is not None:
-            self._update_light_color_temp(color_data)
-        else:
-            _LOGGER.warning(
-                "Received unusable status update for %s: %s",
+            if color_data.isHsv and color_data.hsv is not None:
+                self._update_hsv_values(color_data)
+            elif color_data.colorTempBrightness is not None:
+                self._update_light_color_temp(color_data)
+            else:
+                _LOGGER.warning(
+                    "Received unusable status update for %s: %s",
+                    self._attr_name,
+                    repr(color_data.__dict__),
+                )
+                return
+
+            self._attr_available = True
+            self.schedule_update_ha_state()
+
+        except Exception as e:
+            _LOGGER.error(
+                "Error updating light %s with data %s. Error was %s",
                 self._attr_name,
                 repr(color_data.__dict__),
+                e,
             )
-            return
-
-        self._attr_available = True
-        self.schedule_update_ha_state()
-
-    except Exception as e:
-        _LOGGER.error(
-            "Error updating light %s with data %s. Error was %s",
-            self._attr_name,
-            repr(color_data.__dict__),
-            e,
-        )
 
     def _hsv_to_rgb(self, hs: tuple[float, float], brightness: float):
         brightness_scale_100 = brightness / 255

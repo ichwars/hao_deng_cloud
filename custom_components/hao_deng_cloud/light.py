@@ -28,6 +28,10 @@ UNSUPPORTED_LIGHT_NAME_PARTS = (
     "fernbedienung",
 )
 
+COLOR_TEMP_LIGHT_NAME_PARTS = (
+    "spot",
+)
+
 
 def _bridge_identifier(control_data: list[MqttControlData], place_id: str) -> str | None:
     """Return the Home Assistant device identifier for a bridge."""
@@ -43,6 +47,12 @@ def _is_supported_light_device(device: Device) -> bool:
         return False
     normalized_name = device.displayName.casefold()
     return not any(part in normalized_name for part in UNSUPPORTED_LIGHT_NAME_PARTS)
+
+
+def _prefers_color_temp(device: Device) -> bool:
+    """Return whether a device should default to color temperature commands."""
+    normalized_name = device.displayName.casefold()
+    return any(part in normalized_name for part in COLOR_TEMP_LIGHT_NAME_PARTS)
 
 
 async def async_setup_entry(
@@ -151,6 +161,7 @@ class HaoDengLight(LightEntity):
         self._attr_name = device.displayName
         self._mesh_id = device.meshAddress
         self._bridge_id = bridge_id
+        self._prefers_color_temp = _prefers_color_temp(device)
         self._attr_is_on = False
         self._attr_hs_color = (0, 0)
         self._attr_color_temp_kelvin = 5000
@@ -306,7 +317,14 @@ class HaoDengLight(LightEntity):
         else:
             _LOGGER.info("Just turned on %s ", self._attr_name)
             self.async_write_ha_state()
-            if self._attr_color_mode == ColorMode.COLOR_TEMP:
+            if (
+                self._attr_color_mode == ColorMode.COLOR_TEMP
+                or (
+                    self._attr_color_mode == ColorMode.UNKNOWN
+                    and self._prefers_color_temp
+                )
+            ):
+                self._attr_color_mode = ColorMode.COLOR_TEMP
                 await self._mqtt_connector.set_color_temp(
                     self._mesh_id, self._attr_color_temp_kelvin, self._attr_brightness
                 )
@@ -325,7 +343,10 @@ class HaoDengLight(LightEntity):
         _LOGGER.info("TURN OFF ASYNC %s", self._attr_name)
         self._attr_is_on = False
         self.async_write_ha_state()
-        if self._attr_color_mode == ColorMode.COLOR_TEMP:
+        if self._attr_color_mode == ColorMode.COLOR_TEMP or (
+            self._attr_color_mode == ColorMode.UNKNOWN and self._prefers_color_temp
+        ):
+            self._attr_color_mode = ColorMode.COLOR_TEMP
             await self._mqtt_connector.set_color_temp(
                 self._mesh_id, self._attr_color_temp_kelvin, 0
             )

@@ -51,9 +51,18 @@ async def async_setup_entry(
 
     add_entities(lights)
     mqtt_connector.request_status()  # Get initial status of lights
-
+    hass.async_create_task(_request_initial_status_retries(mqtt_connector))
+    
     return True
 
+async def _request_initial_status_retries(mqtt_connector: MqttConnector) -> None:
+    """Request initial status multiple times after startup."""
+    for delay in (2, 10, 30):
+        await asyncio.sleep(delay)
+        try:
+            mqtt_connector.request_status()
+        except Exception:
+            _LOGGER.exception("Failed to request Hao Deng initial light status")
 
 class HaoDengLight(LightEntity):
     """Hao Deng Light."""

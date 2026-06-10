@@ -18,10 +18,31 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .const import DOMAIN
 from .mqtt_connector import MqttConnector
-from .pocos import Device, ExternalColorData
+from .pocos import Device, ExternalColorData, MqttControlData
 from .rest_api_connector import RestApiConnector
 
 _LOGGER = logging.getLogger(__name__)
+
+UNSUPPORTED_LIGHT_NAME_PARTS = (
+    "remote",
+    "fernbedienung",
+)
+
+
+def _bridge_identifier(control_data: list[MqttControlData], place_id: str) -> str | None:
+    """Return the Home Assistant device identifier for a bridge."""
+    hardware = next((item for item in control_data if item.deviceType == "HARDWARE"), None)
+    if hardware is None:
+        return None
+    return f"bridge_{place_id}_{hardware.macAddress or hardware.deviceName}"
+
+
+def _is_supported_light_device(device: Device) -> bool:
+    """Return whether a cloud device should be exposed as a light."""
+    if device.wiringType == 0:
+        return False
+    normalized_name = device.displayName.casefold()
+    return not any(part in normalized_name for part in UNSUPPORTED_LIGHT_NAME_PARTS)
 
 
 async def async_setup_entry(
@@ -55,6 +76,7 @@ async def async_setup_entry(
             _LOGGER.warning("No MQTT control data found for Hao Deng place %s", place_id)
             continue
 
+        bridge_id = _bridge_identifier(controlData, place_id)
         mqtt_connector = MqttConnector(controlData, config_entry.data["country"], devices)
         mqtt_connector.connect()
 
@@ -63,9 +85,28 @@ async def async_setup_entry(
 
         place_lights = []
         for device in devices:
-            if device.wiringType == 0:
+            _LOGGER.debug(
+                "Discovered Hao Deng device: name=%s, mesh=%s, deviceType=%s, "
+                "controlType=%s, wiringType=%s, groups=%s",
+                device.displayName,
+                device.meshAddress,
+                device.deviceType,
+                device.controlType,
+                device.wiringType,
+                device.groups,
+            )
+            if not _is_supported_light_device(device):
+                _LOGGER.info(
+                    "Skipping unsupported Hao Deng light candidate: %s "
+                    "(mesh=%s, deviceType=%s, controlType=%s, wiringType=%s)",
+                    device.displayName,
+                    device.meshAddress,
+                    device.deviceType,
+                    device.controlType,
+                    device.wiringType,
+                )
                 continue
-            light = HaoDengLight(config_entry, device, mqtt_connector)
+            light = HaoDengLight(config_entry, device, mqtt_connector, bridge_id)
             place_lights.append(light)
 
         if len(place_lights) == 0:
@@ -96,7 +137,11 @@ class HaoDengLight(LightEntity):
     """Hao Deng Light."""
 
     def __init__(
-        self, config_entry: ConfigEntry, device: Device, mqtt_connector: MqttConnector
+        self,
+        config_entry: ConfigEntry,
+        device: Device,
+        mqtt_connector: MqttConnector,
+        bridge_id: str | None,
     ) -> None:
         """Initialize the light."""
         _LOGGER.info("Initializing Light %s", device.displayName)
@@ -105,8 +150,10 @@ class HaoDengLight(LightEntity):
         self._attr_unique_id = device.uniID  # Use config entry ID for uniqueness
         self._attr_name = device.displayName
         self._mesh_id = device.meshAddress
+        self._bridge_id = bridge_id
         self._attr_is_on = False
-        self._rgb_color = (255, 0, 0)  # Initial color
+        self._attr_hs_color = (0, 0)
+        self._attr_color_temp_kelvin = 5000
         self._attr_supported_color_modes = [
             ColorMode.HS,
             ColorMode.COLOR_TEMP,
@@ -251,7 +298,7 @@ class HaoDengLight(LightEntity):
                 await self._mqtt_connector.set_color_temp(
                     self._mesh_id, self._attr_color_temp_kelvin, self._attr_brightness
                 )
-            elif self._attr_color_mode == ColorMode.HS:
+            else:
                 rgb = self._hsv_to_rgb(self._attr_hs_color, self._attr_brightness)
                 await self._mqtt_connector.set_color(
                     self._mesh_id, rgb[0], rgb[1], rgb[2]
@@ -259,11 +306,18 @@ class HaoDengLight(LightEntity):
         else:
             _LOGGER.info("Just turned on %s ", self._attr_name)
             self.async_write_ha_state()
-            await self._mqtt_connector.turn_on(self._mesh_id)
-            if self._attr_color_mode == ColorMode.UNKNOWN:
-                # Light was off, so we don't know it's color state. Ask the cloud for new color
-                await asyncio.sleep(0.1)
-                self._mqtt_connector.request_status()
+            if self._attr_color_mode == ColorMode.COLOR_TEMP:
+                await self._mqtt_connector.set_color_temp(
+                    self._mesh_id, self._attr_color_temp_kelvin, self._attr_brightness
+                )
+            else:
+                self._attr_color_mode = ColorMode.HS
+                rgb = self._hsv_to_rgb(self._attr_hs_color, self._attr_brightness)
+                await self._mqtt_connector.set_color(
+                    self._mesh_id, rgb[0], rgb[1], rgb[2]
+                )
+            await asyncio.sleep(0.1)
+            self._mqtt_connector.request_status()
         self._last_update = time.time()
 
     async def async_turn_off(self, **kwargs) -> None:
@@ -271,14 +325,18 @@ class HaoDengLight(LightEntity):
         _LOGGER.info("TURN OFF ASYNC %s", self._attr_name)
         self._attr_is_on = False
         self.async_write_ha_state()
-        await self._mqtt_connector.turn_off(self._mesh_id)
-        # Send command to your RGB light to turn off
+        if self._attr_color_mode == ColorMode.COLOR_TEMP:
+            await self._mqtt_connector.set_color_temp(
+                self._mesh_id, self._attr_color_temp_kelvin, 0
+            )
+        else:
+            await self._mqtt_connector.set_color(self._mesh_id, 0, 0, 0)
         self._last_update = time.time()
 
     @property
     def device_info(self) -> DeviceInfo:
         """Return the device info."""
-        return DeviceInfo(
+        device_info = DeviceInfo(
             identifiers={
                 (DOMAIN, self._attr_unique_id)
             },
@@ -287,3 +345,6 @@ class HaoDengLight(LightEntity):
             model="Hao Deng Light",
             sw_version="1.0.0",
         )
+        if self._bridge_id is not None:
+            device_info["via_device"] = (DOMAIN, self._bridge_id)
+        return device_info

@@ -72,12 +72,12 @@ class MqttConnector:
             data = json.loads(msg.payload.decode("ASCII"))
             for d in data:
                 _LOGGER.debug("Received status update for mesh address %s: %s", d["a"], d["d"])
+                color_tuple = self._convert_notification_data_to_color_data(
+                    d["d"], d["a"]
+                )
+                self._update_timestamps.update({d["a"]: time.time()})
                 for s in self.subscriptions:
-                    color_tuple = self._convert_notification_data_to_color_data(
-                        d["d"], d["a"]
-                    )
                     s(d["a"], color_tuple)
-                    self._update_timestamps.update({d["a"]: time.time()})
 
         mqttc: mqtt.Client
         if paho.mqtt.__version__[0] > '1':
@@ -160,6 +160,13 @@ class MqttConnector:
         self, data: str, id: int
     ) -> ExternalColorData:
         try:
+            if len(data) < 8:
+                _LOGGER.debug(
+                    "Ignoring short status payload for mesh address %s: data=%s",
+                    id,
+                    data,
+                )
+                return ExternalColorData(False, None, None, False)
             saturation = data[4:6]
             saturation_percent = int(saturation, 16) / 63
             if saturation_percent > 1:
@@ -277,7 +284,7 @@ class MqttConnector:
     async def _wait_and_retry_queue(self):
         await asyncio.sleep(3)
         for queue_item in self._queue.values():
-            last_update = self._update_timestamps[queue_item.dstAdr]
+            last_update = self._update_timestamps.get(queue_item.dstAdr, 0)
             if time.time() - last_update > 5:
                 # We sent a upate, but didn't recieve a corresponding update from the broker, retry
                 _LOGGER.warning(

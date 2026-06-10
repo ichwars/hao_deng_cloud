@@ -71,7 +71,7 @@ class MqttConnector:
         def on_message(client, userdata, msg):
             data = json.loads(msg.payload.decode("ASCII"))
             for d in data:
-                # _LOGGER.info("ON_MESSAGE: A: %d, D: %s", d["a"], d["d"])
+                _LOGGER.debug("Received status update for mesh address %s: %s", d["a"], d["d"])
                 for s in self.subscriptions:
                     color_tuple = self._convert_notification_data_to_color_data(
                         d["d"], d["a"]

@@ -8,6 +8,7 @@ Maintained fork of `Pharylon/hao_deng_cloud` for Home Assistant.
 - Adds startup status refresh retries after Home Assistant restarts
 - Uses unique cloud IDs for Home Assistant device registry identifiers
 - Keeps the original Home Assistant domain: `hao_deng_cloud`
+- Adds support for accounts with multiple Hao Deng places / bridges
 
 ## Installation via HACS custom repository
 

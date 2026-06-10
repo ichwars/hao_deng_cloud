@@ -167,6 +167,13 @@ class MqttConnector:
                     data,
                 )
                 return ExternalColorData(False, None, None, False)
+            if data[2:8] == "000000":
+                _LOGGER.debug(
+                    "Ignoring empty status payload for mesh address %s: data=%s",
+                    id,
+                    data,
+                )
+                return ExternalColorData(False, None, None, data[0:2] != "00")
             saturation = data[4:6]
             saturation_percent = int(saturation, 16) / 63
             if saturation_percent > 1:
@@ -235,7 +242,9 @@ class MqttConnector:
         # _LOGGER.info("Mesh addresses: %s", mesh_addresses)
         for group_id, group_addresses in self._groups.items():
             # _LOGGER.info("Group ID %s, group addresses: %s", group_id, group_addresses)
-            if all(addr in mesh_addresses for addr in group_addresses):
+            if len(group_addresses) > 1 and all(
+                addr in mesh_addresses for addr in group_addresses
+            ):
                 group_payload = MqttLightPayload(
                     group_id, payloads[0].opCode, payloads[0].data
                 )

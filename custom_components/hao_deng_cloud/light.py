@@ -229,15 +229,15 @@ class HaoDengLight(LightEntity):
             ):
                 return
 
-            _LOGGER.info("Updating %s", self._attr_name)
-
             if color_data.isHsv and color_data.hsv is not None:
+                _LOGGER.info("Updating %s", self._attr_name)
                 self._update_hsv_values(color_data)
             elif color_data.colorTempBrightness is not None:
+                _LOGGER.info("Updating %s", self._attr_name)
                 self._update_light_color_temp(color_data)
             else:
-                _LOGGER.warning(
-                    "Received unusable status update for %s: %s",
+                _LOGGER.debug(
+                    "Ignoring status update without usable color data for %s: %s",
                     self._attr_name,
                     repr(color_data.__dict__),
                 )

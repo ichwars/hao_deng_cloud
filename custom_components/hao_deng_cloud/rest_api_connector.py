@@ -56,7 +56,8 @@ class RestApiConnector:
         self._device_secret = None
         self._installation_id = installation_id
         self.mqtt_info: list[MqttControlData] = None
-        self.devices: list[Device]
+        self._devices_list: list[Device] = []
+        self.places: list[str] = []
         self._placeUniID = ""
 
         if not self._installation_id:
@@ -160,12 +161,20 @@ class RestApiConnector:
                         resultJSON = (await response.json())[
                             "result"
                         ]  # Previous Code:  responseJSON = response.json()['result'] #Previous Code:
-                        self._placeUniID = resultJSON[0]["placeUniID"]
+
+                        self.places = [x["placeUniID"] for x in resultJSON if x.get("placeUniID")]
+
+                        if len(self.places) == 0:
+                            raise Exception("No Hao Deng places found for this account")
+
+                        self._placeUniID = self.places[0]
         else:
             raise Exception(
                 "No login session detected! - %s" % response.json()["error"]
             )
-
+    def set_place(self, place_id: str) -> None:
+        """Set active place ID."""
+        self._placeUniID = place_id
     async def get_mqtt_control_data(self) -> list[MqttControlData]:
         """Get MQTT Control Data."""
         if (self._auth_token) is None or self._user_id is None:
@@ -239,7 +248,7 @@ class RestApiConnector:
                     for x in responseJSON:
                         device = Device(x)
                         myList.append(device)
-                    self.devices = myList
+                    self._devices_list = myList
                     return myList
         else:
             raise Exception(  # noqa: TRY002

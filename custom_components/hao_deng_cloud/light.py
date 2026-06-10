@@ -35,24 +35,52 @@ async def async_setup_entry(
         config_entry.data["country"],
     )
     await rest_connector.connect()
-    devices: list[Device] = await rest_connector.devices()
-    controlData = await rest_connector.get_mqtt_control_data()
-    mqtt_connector = MqttConnector(controlData, config_entry.data["country"], devices)
-    mqtt_connector.connect()
-    while mqtt_connector.client_connected is False:
-        await asyncio.sleep(0.1)
 
     lights = []
-    for device in devices:
-        if device.wiringType == 0:
+    mqtt_connectors = []
+
+    place_ids = rest_connector.places or [rest_connector._placeUniID]
+
+    for place_id in place_ids:
+        _LOGGER.info("Setting up Hao Deng place: %s", place_id)
+        rest_connector.set_place(place_id)
+
+        devices: list[Device] = await rest_connector.devices()
+        if len(devices) == 0:
+            _LOGGER.info("No Hao Deng devices found for place %s", place_id)
             continue
-        light = HaoDengLight(config_entry, device, mqtt_connector)
-        lights.append(light)
+
+        controlData = await rest_connector.get_mqtt_control_data()
+        if len(controlData) == 0:
+            _LOGGER.warning("No MQTT control data found for Hao Deng place %s", place_id)
+            continue
+
+        mqtt_connector = MqttConnector(controlData, config_entry.data["country"], devices)
+        mqtt_connector.connect()
+
+        while mqtt_connector.client_connected is False:
+            await asyncio.sleep(0.1)
+
+        place_lights = []
+        for device in devices:
+            if device.wiringType == 0:
+                continue
+            light = HaoDengLight(config_entry, device, mqtt_connector)
+            place_lights.append(light)
+
+        if len(place_lights) == 0:
+            _LOGGER.info("No Hao Deng lights found for place %s", place_id)
+            continue
+
+        lights.extend(place_lights)
+        mqtt_connectors.append(mqtt_connector)
 
     add_entities(lights)
-    mqtt_connector.request_status()  # Get initial status of lights
-    hass.async_create_task(_request_initial_status_retries(mqtt_connector))
-    
+
+    for mqtt_connector in mqtt_connectors:
+        mqtt_connector.request_status()  # Get initial status of lights
+        hass.async_create_task(_request_initial_status_retries(mqtt_connector))
+
     return True
 
 async def _request_initial_status_retries(mqtt_connector: MqttConnector) -> None:

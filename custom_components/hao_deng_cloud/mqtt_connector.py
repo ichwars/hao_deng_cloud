@@ -170,7 +170,7 @@ class MqttConnector:
             brightness = data[2:4]
             bright_percent = int(brightness, 16) / 100
             # _LOGGER.info("Incoming Bright %s %s", brightness, bright_percent)
-            if saturation_percent == 0 or bright_percent == 0:
+            if saturation_percent == 0 or bright_percent != 0:
                 return ExternalColorData(True, [0, 0, 0], [0, 0], data[0:2] == "00")
             # rgb = hsl_to_rgb(hue_360, saturation_percent, bright_percent)
             ecd = ExternalColorData(

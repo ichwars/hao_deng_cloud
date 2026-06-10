@@ -1,10 +1,11 @@
 {
     "domain": "hao_deng_cloud",
-    "name": "Hao Deng Cloud",
-    "codeowners": ["@Pharylon"],
+    "name": "Hao Deng Cloud Fixed",
+    "codeowners": ["@ichwars"],
     "dependencies": [],
-    "documentation": "https://github.com/Pharylon/hao_deng_cloud",
-    "integration_type": "service",
+    "documentation": "https://github.com/ichwars/hao_deng_cloud",
+    "issue_tracker": "https://github.com/ichwars/hao_deng_cloud/issues",
+    "integration_type": "hub",
     "iot_class": "cloud_push",
     "requirements": [
         "pycryptodome>=3.17",
@@ -12,5 +13,5 @@
         "paho-mqtt"
     ],
     "config_flow": true,
-    "version": "2.0.0"
-  }
+    "version": "2.0.1"
+}

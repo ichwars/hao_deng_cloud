@@ -247,8 +247,7 @@ class HaoDengLight(LightEntity):
         """Return the device info."""
         return DeviceInfo(
             identifiers={
-                # Serial numbers are unique identifiers within a specific domain
-                ("hao_deng_cloud", self._mesh_id)
+                (DOMAIN, self._attr_unique_id)
             },
             name=self.name,
             manufacturer="Hao Deng",
